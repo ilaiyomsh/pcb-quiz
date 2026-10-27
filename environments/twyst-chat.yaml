@@ -1,0 +1,8 @@
+# The chat agent has no sandbox tools, so the container needs no outbound network at all.
+name: twyst-chat-env
+config:
+  type: cloud
+  networking:
+    type: limited
+    allow_package_managers: false
+    allow_mcp_servers: false

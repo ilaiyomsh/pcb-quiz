@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Twyst | אפיון ראשוני</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Noto+Sans+Hebrew:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --blue: #6366F1;
+      --purple: #A855F7;
+      --magenta: #D946EF;
+      --peach: #FDBA74;
+      --navy: #0F172A;
+      --gray: #94A3B8;
+      --line: #E2E8F0;
+      --bot-bg: #F1F5F9;
+      --page: #F8FAFC;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Noto Sans Hebrew", system-ui, sans-serif;
+      color: var(--navy);
+      background: var(--page);
+      display: flex;
+      justify-content: center;
+    }
+    .chat {
+      width: 100%;
+      max-width: 720px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-inline: 1px solid var(--line);
+    }
+    .bar {
+      height: 4px;
+      background: linear-gradient(to left, var(--blue), var(--purple), var(--magenta), var(--peach));
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .wordmark {
+      font-family: "Montserrat", sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--blue);
+      direction: ltr;
+    }
+    .tagline { color: var(--gray); font-size: 13px; font-style: italic; direction: ltr; }
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bubble {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .bot { align-self: flex-start; background: var(--bot-bg); border-start-start-radius: 4px; }
+    .user {
+      align-self: flex-end;
+      color: #fff;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      border-start-end-radius: 4px;
+    }
+    .note { align-self: center; color: var(--gray); font-size: 13px; text-align: center; }
+    .note.ok { color: #16A34A; }
+    .typing { display: inline-flex; gap: 4px; padding: 14px; }
+    .typing span {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--gray);
+      animation: blink 1.2s infinite ease-in-out;
+    }
+    .typing span:nth-child(2) { animation-delay: .2s; }
+    .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
+    form {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--line);
+    }
+    textarea {
+      flex: 1;
+      resize: none;
+      font: inherit;
+      color: inherit;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      max-height: 140px;
+    }
+    textarea:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+    button {
+      font: inherit;
+      font-weight: 600;
+      color: #fff;
+      background: var(--blue);
+      border: 0;
+      border-radius: 12px;
+      padding: 0 18px;
+      cursor: pointer;
+    }
+    button:disabled, textarea:disabled { opacity: .5; cursor: default; }
+    .privacy { margin: 0; padding: 0 16px 12px; color: var(--gray); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main class="chat">
+    <div class="bar"></div>
+    <header>
+      <span class="wordmark">twyst.</span>
+      <span class="tagline">Systems that drive decisions.</span>
+    </header>
+    <div id="log" aria-live="polite"></div>
+    <form id="form">
+      <textarea id="input" rows="1" maxlength="2000" placeholder="כתבו כאן..." aria-label="הודעה"></textarea>
+      <button id="send" type="submit">שליחה</button>
+    </form>
+    <p class="privacy">הסיכום נשמר כדי שנציג Twyst יוכל לחזור אליכם. אין צורך לשתף מידע רגיש.</p>
+  </main>
+
+  <script>
+    // Keep in sync with the opening message quoted in agents/twyst-discovery.md.
+    const GREETING = "היי, אני העוזר הדיגיטלי של Twyst. אשאל 3-5 שאלות קצרות כדי להבין איפה AI יכול לחסוך לכם הכי הרבה זמן. נתחיל: במה הארגון שלכם עוסק, ומה התפקיד שלך בו?";
+
+    const ERRORS = {
+      unknown_session: "השיחה פגה. רעננו את הדף כדי להתחיל שיחה חדשה.",
+      turn_limit: "הגענו לסוף השיחה. נציג Twyst ישמח להמשיך מכאן.",
+      rate_limited: "נפתחו הרבה שיחות מהרשת שלכם. נסו שוב בעוד כשעה.",
+      invalid_message: "ההודעה ריקה או ארוכה מדי.",
+    };
+    const FALLBACK_ERROR = "משהו השתבש אצלנו. אפשר לנסות שוב בעוד רגע.";
+
+    const log = document.getElementById("log");
+    const form = document.getElementById("form");
+    const input = document.getElementById("input");
+    const sendButton = document.getElementById("send");
+    const bubbles = new Map();
+    let sessionId = null;
+    let typing = null;
+
+    function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+    function addBubble(kind, text) {
+      const el = document.createElement("div");
+      el.className = `bubble ${kind}`;
+      el.dir = "auto";
+      el.textContent = text;
+      log.insertBefore(el, typing);
+      scrollDown();
+      return el;
+    }
+
+    function addNote(text, ok = false) {
+      const el = document.createElement("div");
+      el.className = ok ? "note ok" : "note";
+      el.textContent = text;
+      log.insertBefore(el, typing);
+      scrollDown();
+    }
+
+    function setBusy(busy) {
+      input.disabled = busy;
+      sendButton.disabled = busy;
+      if (busy && !typing) {
+        typing = document.createElement("div");
+        typing.className = "bubble bot typing";
+        typing.innerHTML = "<span></span><span></span><span></span>";
+        log.appendChild(typing);
+        scrollDown();
+      } else if (!busy && typing) {
+        typing.remove();
+        typing = null;
+        input.focus();
+      }
+    }
+
+    function handleEvent(event) {
+      switch (event.type) {
+        case "session":
+          sessionId = event.sessionId;
+          break;
+        case "delta": {
+          const el = bubbles.get(event.id) ?? addBubble("bot", "");
+          bubbles.set(event.id, el);
+          el.textContent += event.text;
+          scrollDown();
+          break;
+        }
+        case "message": {
+          // The buffered message is the complete text; it replaces the streamed preview.
+          const el = bubbles.get(event.id) ?? addBubble("bot", "");
+          bubbles.set(event.id, el);
+          el.textContent = event.text;
+          scrollDown();
+          break;
+        }
+        case "lead_saved":
+          addNote("✓ הסיכום הועבר לצוות Twyst", true);
+          break;
+        case "error":
+          addNote(event.message);
+          break;
+      }
+    }
+
+    async function send(text) {
+      addBubble("user", text);
+      setBusy(true);
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionId, message: text }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          addNote(ERRORS[body.error] ?? FALLBACK_ERROR);
+          return;
+        }
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          let end;
+          while ((end = buffer.indexOf("\n\n")) !== -1) {
+            const frame = buffer.slice(0, end);
+            buffer = buffer.slice(end + 2);
+            if (frame.startsWith("data: ")) handleEvent(JSON.parse(frame.slice(6)));
+          }
+        }
+      } catch {
+        addNote(FALLBACK_ERROR);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text || input.disabled) return;
+      input.value = "";
+      input.style.height = "";
+      send(text);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    input.addEventListener("input", () => {
+      input.style.height = "";
+      input.style.height = `${input.scrollHeight}px`;
+    });
+
+    addBubble("bot", GREETING);
+    input.focus();
+  </script>
+</body>
+</html>
