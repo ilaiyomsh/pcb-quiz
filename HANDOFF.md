@@ -29,21 +29,49 @@
 ## מצב הסביבה
 
 - המפתח זמין בסביבת הענן בשם `ANTHROPIC_KEY`, לא `ANTHROPIC_API_KEY`. ה-SDK ו-`ant` קוראים רק את `ANTHROPIC_API_KEY`, ולכן מריצים עם `ANTHROPIC_API_KEY="$ANTHROPIC_KEY"` (או שהמשתמש ישנה את שם המשתנה בהגדרות הסביבה). המפתח שייך ל-workspace `wrkspc_01LB7nNcgsEFSh6bqET6wQ2B`, לא ל-default.
-- `ant` 2.4.0 הותקן עם `go install 'github.com/anthropics/anthropic-cli/v2/cmd/ant@v2.4.0'` (`GOTOOLCHAIN=auto`, כי נדרש Go 1.25) ל-`/root/go/bin/ant`. הורדת release מ-GitHub חסומה בפרוקסי. ההתקנה לא שורדת סשן חדש.
+- `ant` 2.4.0 הותקן עם `go install 'github.com/anthropics/anthropic-cli/v2/cmd/ant@v2.4.0'` (`GOTOOLCHAIN=auto`, כי נדרש Go 1.25) ל-`/root/go/bin/ant`. ההתקנה לא שורדת סשן חדש. לפריסה לא צריך את `ant`, רק אם משנים את הסוכן או הסביבה.
 - הסוכן: `agent_01L4JFT2A3fpNPntvhp9Aidk` (גרסה 2). הסביבה: `env_01838MvQK7ragFhnRhjN39o7`. שניהם ב-`claude-lock.json`.
 - `.env` (לא ב-git) כולל את שני המזהים ו-`ANTHROPIC_WORKSPACE=wrkspc_01LB7nNcgsEFSh6bqET6wQ2B`. לא נבדק אם קישורי ה-Console בלוג עובדים עם מזהה ה-workspace.
 - `twyst.co.il` נגיש עכשיו. פסקת "על Twyst" עודכנה מהאתר (גרסה 2 של הסוכן), בלי שמות לקוחות, מספרים או משכי זמן של שירותים.
 - גרסה 2 גם מורה לסוכן לכתוב טקסט פשוט בלי Markdown: בגרסה 1 הסיכום כלל `**הדגשה**`, והממשק מציג טקסט כמו שהוא (`textContent`), כך שהכוכביות היו נראות.
 
-## הצעדים הבאים
+## פריסה ל-Fly.io (סשן 2, לא הושלמה)
 
-1. לשאול את המשתמש אם לפתוח PR ל-`main`.
-2. שאלות פתוחות (למטה).
+המשתמש בחר ב-Fly (Railway ו-Render נפסלו). הכול בבראנץ': `Dockerfile`, `.dockerignore`, `fly.toml` (מזהי הסוכן והסביבה ב-`[env]`, אזור `fra`, `auto_stop_machines = "suspend"`, volume בשם `leads` ב-`/app/leads`, מכונה של 256MB), והוראות ב-README.
+
+`TRUST_PROXY` הוחלף ב-`CLIENT_IP_HEADER`: הכותרת היחידה שממנה קוראים את כתובת המבקר להגבלת השיחות לכל IP. ב-Fly זו `fly-client-ip`, ו-`fly.toml` כבר מגדיר אותה. אין נפילה לכותרות אחרות, כי מבקר יכול לשלוח `X-Forwarded-For` או `X-Real-IP` משלו. נבדק בקונטיינר שנבנה: עם אותו `fly-client-ip` וכותרות אחרות מזויפות, השיחה ה-11 בשעה נחסמת.
+
+למה מכונה אחת והשהיה: השרת שומר את השיחות הפתוחות ב-Map בזיכרון. Fly מפעיל מכונה אחת לאפליקציה עם volume, ו-suspend שומר את הזיכרון בזמן שהמכונה ישנה.
+
+**מה עצר:** הפרוקסי של הסשן החזיר 403 לכל השרתים של Fly. המשתמש הוסיף ל-Allowed domains את `api.fly.io`, `api.machines.dev`, `registry.fly.io`, `twyst-discovery-chat.fly.dev`, וזה נכנס לתוקף רק בסשן חדש. המשתמש נתן טוקן Fly שתקף ליום אחד, והוא יבטל אותו בסוף. הטוקן לא נשמר בשום מקום ולא נכנס ל-git; המשתמש מדביק אותו בפרומפט של הסשן הבא.
+
+**דברים שנבדקו בסביבה הזו ויחסכו זמן:**
+
+- flyctl: הורדה מ-GitHub עובדת. `https://github.com/superfly/flyctl/releases/download/v0.4.123/flyctl_0.4.123_Linux_x86_64.tar.gz`.
+- Docker מותקן אבל ה-daemon לא רץ: מפעילים `dockerd` ברקע.
+- Docker Hub מחזיר 429. מושכים `mirror.gcr.io/library/node:22-slim` ומתייגים אותו כ-`node:22-slim`.
+- `npm ci` בתוך `docker build` נכשל ב-`SELF_SIGNED_CERT_IN_CHAIN`, כי הפרוקסי של הסשן מיירט TLS. בונים מעותק של ה-`Dockerfile` שבו השורה היא `RUN --mount=type=secret,id=ca,target=/tmp/ca.crt NODE_EXTRA_CA_CERTS=/tmp/ca.crt npm ci --omit=dev`, עם `--secret id=ca,src=/root/.ccr/ca-bundle.crt`. ה-secret לא נשאר ב-image (נבדק). לא לשנות את ה-`Dockerfile` שבריפו.
+
+**הצעדים:**
+
+1. לוודא גישה: `curl -sS -o /dev/null -w '%{http_code}' https://api.machines.dev` לא אמור להחזיר 403 מהפרוקסי.
+2. לשמור את הטוקן בקובץ ב-scratchpad עם `chmod 600`, ולהעביר אותו לכל פקודה כ-`FLY_API_TOKEN="$(cat <file>)"`. לא להדפיס אותו.
+3. `flyctl orgs list`, ואז `flyctl apps create twyst-discovery-chat -o <org>`. אם השם תפוס: לבחור שם אחר, לעדכן `app` ב-`fly.toml`, ולבקש מהמשתמש להוסיף את הדומיין החדש של `fly.dev` לרשימה (רק לצורך הבדיקה).
+4. secret בלי שהמפתח יופיע בשורת הפקודה: `printf 'ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_KEY" | flyctl secrets import --stage -a <app>`.
+5. `flyctl volumes create leads --region fra --size 1 -a <app> -y`.
+6. לבנות image (ראו למעלה), `flyctl auth docker`, `docker push registry.fly.io/<app>:<git sha>`, ואז `flyctl deploy --image registry.fly.io/<app>:<git sha> --ha=false -a <app>`. אפשרות אחרת: `flyctl deploy --remote-only`, אבל ה-builder של Fly עלול לדרוש דומיינים נוספים.
+7. לבדוק:
+   - `flyctl machines list -a <app>`: מכונה אחת עם ה-volume.
+   - `https://<app>.fly.dev/` מחזיר 200.
+   - שיחה אחת קצרה ומלאה דרך `/api/chat` בכתובת הציבורית: הזרמה עובדת, הליד נשמר (`flyctl machine exec <id> "ls /app/leads" -a <app>`).
+   - אחרי כמה דקות בלי תנועה המכונה ב-`suspended`, והבקשה הבאה מעירה אותה.
+8. לנקות: למחוק את קובץ הטוקן ואת `~/.docker/config.json`, ולהזכיר למשתמש לבטל את הטוקן.
+9. לדווח למשתמש את הכתובת, ולשאול אם לפתוח PR ל-`main`.
 
 ## להיזהר
 
 - לא ליצור את הסוכן דרך Console, `ant beta:agents create` או `agents.create()` ב-SDK. משאב שנוצר מחוץ ל-`ant apply` לא נכנס ל-lock, וזה יוצר כפילות.
-- לא להדפיס, לרשום בלוג או לעשות commit למפתח.
+- לא להדפיס, לרשום בלוג או לעשות commit למפתח או לטוקן של Fly.
 - כל שיחת ניסיון עולה כסף אמיתי (Opus 5.5). להריץ מעט שיחות ממוקדות.
 - לא לבצע archive או delete לסשנים או לסוכנים בלי בקשה מפורשת.
 
@@ -51,5 +79,5 @@
 
 - לפתוח PR ל-`main`?
 - לשלוח את הלידים ללוח ב-monday במקום לקבצי JSON? צריך טוקן ומזהה לוח.
-- איפה הבוט יתארח, ואיך ישתלב באתר (iframe או widget)?
+- איך הבוט ישתלב באתר (iframe או widget)? האירוח: Fly.io.
 - workspace נפרד עם תקרה לפני העלייה לאוויר.
