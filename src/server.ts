@@ -32,7 +32,11 @@ const sessionStartsByIp = new Map<string, number[]>();
 
 function clientIp(req: IncomingMessage): string {
   // Behind a reverse proxy every request comes from the proxy, so read the forwarded address instead.
+  // X-Real-IP comes first: Railway's edge overwrites it on every request, so visitors cannot spoof it.
   if (process.env.TRUST_PROXY === "1") {
+    const realIp = req.headers["x-real-ip"];
+    const real = (Array.isArray(realIp) ? realIp[0] : realIp)?.trim();
+    if (real) return real;
     const forwarded = req.headers["x-forwarded-for"];
     const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim();
     if (first) return first;
