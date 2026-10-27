@@ -1,0 +1,36 @@
+# Fly.io config for the discovery chat. The API key is a secret: set ANTHROPIC_API_KEY in the dashboard
+# (Secrets) or with `fly secrets set`. Everything else the server needs is here.
+app = "twyst-discovery-chat"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  # From claude-lock.json
+  TWYST_AGENT_ID = "agent_01L4JFT2A3fpNPntvhp9Aidk"
+  TWYST_ENVIRONMENT_ID = "env_01838MvQK7ragFhnRhjN39o7"
+  ANTHROPIC_WORKSPACE = "wrkspc_01LB7nNcgsEFSh6bqET6wQ2B"
+  SESSION_BUDGET_CENTS = "100"
+  # Set by Fly's proxy on every request
+  CLIENT_IP_HEADER = "fly-client-ip"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Suspend keeps the machine's memory, so open conversations survive an idle period.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+# Leads are files, so they need a volume. With a volume Fly also runs a single machine,
+# which the server needs: open conversations are kept in its memory.
+[mounts]
+  source = "leads"
+  destination = "/app/leads"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

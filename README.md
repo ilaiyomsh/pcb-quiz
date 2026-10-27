@@ -14,6 +14,7 @@
 | `src/chat.ts` | יצירת session, הזרמת התשובה לדפדפן, מענה לקריאה לכלי |
 | `src/leads.ts` | שמירת סיכומי האפיון ל-`leads/*.json` |
 | `public/index.html` | חלון הצ'אט (RTL, צבעי המותג) |
+| `Dockerfile`, `fly.toml` | העלאה ל-Fly.io |
 
 הודעת הפתיחה מופיעה גם ב-`public/index.html` וגם בהנחיות הסוכן. אם משנים אותה, צריך לשנות בשני המקומות.
 
@@ -46,22 +47,21 @@ npm run typecheck
 
 כל שיחה מקבלת קישור לצפייה ב-Console, שמודפס ללוג של השרת. כל סיכום שנשמר מופיע ב-`leads/`.
 
-## העלאה ל-Railway
+## העלאה ל-Fly.io
 
-1. New Project ← Deploy from GitHub repo ← `ilaiyomsh/pcb-quiz`. Railway מזהה Node ומריץ `npm start`.
-2. ב-Settings ← Source, לבחור את הבראנץ' שבו נמצא הצ'אט (כל עוד הוא לא מוזג, `twyst-discovery-chat`).
-3. ב-Variables להגדיר:
-   - `ANTHROPIC_API_KEY`: מפתח מאותו workspace שבו נוצר הסוכן (ה-`workspace_id` ב-`claude-lock.json`). עדיף מפתח נפרד לשרת, שאפשר לבטל בלי לפגוע בדברים אחרים.
-   - `TWYST_AGENT_ID` ו-`TWYST_ENVIRONMENT_ID` מתוך `claude-lock.json`.
-   - `TRUST_PROXY=1`, כדי שהגבלת השיחות לכל IP תעבוד מאחורי ה-proxy של Railway.
-   - רשות: `ANTHROPIC_WORKSPACE`, `SESSION_BUDGET_CENTS`.
-4. ב-Settings ← Networking ← Generate Domain, כדי לקבל כתובת ציבורית.
-5. כדי שהלידים לא יימחקו בכל deploy, לחבר Volume בנתיב `/app/leads`.
+`fly.toml` ו-`Dockerfile` כבר מוגדרים: מזהי הסוכן והסביבה, אזור פרנקפורט, מכונה של 256MB שנכנסת להשהיה (suspend) כשאין תנועה, ו-volume ללידים ב-`/app/leads`.
 
-השרת שומר את השיחות הפתוחות בזיכרון, ולכן צריך להריץ אותו ב-replica אחד. deploy חדש מנתק שיחות שבאמצע, והמבקר יתבקש לרענן את הדף.
+1. בדשבורד של Fly: Launch an app ← GitHub ← `ilaiyomsh/pcb-quiz`, בבראנץ' שבו נמצא הצ'אט (כל עוד הוא לא מוזג, `twyst-discovery-chat`). אם השם `twyst-discovery-chat` תפוס, בוחרים שם אחר.
+2. להגדיר secret בשם `ANTHROPIC_API_KEY`: מפתח מאותו workspace שבו נוצר הסוכן (ה-`workspace_id` ב-`claude-lock.json`). עדיף מפתח נפרד לשרת, שאפשר לבטל בלי לפגוע בדברים אחרים.
+3. אם מתבקשים ליצור volume, השם הוא `leads`, ו-1GB מספיק.
+4. הכתובת: `https://<שם האפליקציה>.fly.dev`.
+
+מה-CLI: `fly launch` בתיקייה הזו (משתמש ב-`fly.toml` הקיים), ואז `fly secrets set ANTHROPIC_API_KEY=...`.
+
+השרת שומר את השיחות הפתוחות בזיכרון, ולכן צריך לרוץ על מכונה אחת. ה-volume דואג לזה: Fly מפעיל מכונה אחת לאפליקציה עם volume. אם בכל זאת נוצרה מכונה שנייה, מורידים אותה (`fly scale count 1`). ההשהיה שומרת את הזיכרון, כך ששיחה שמחכה למבקר לא נקטעת. deploy חדש כן מנתק שיחות שבאמצע, והמבקר יתבקש לרענן את הדף.
 
 ## הגבלות מובנות
 
 - תקרת הוצאה של $1 לשיחה (`SESSION_BUDGET_CENTS`).
 - עד 12 הודעות בשיחה, ועד 2,000 תווים בהודעה.
-- עד 10 שיחות חדשות בשעה מכל כתובת IP. מאחורי reverse proxy מגדירים `TRUST_PROXY=1`.
+- עד 10 שיחות חדשות בשעה מכל כתובת IP. מאחורי reverse proxy, `CLIENT_IP_HEADER` קובע מאיזו כותרת לקרוא את הכתובת (ב-Fly: `fly-client-ip`, כבר ב-`fly.toml`).

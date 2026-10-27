@@ -30,16 +30,16 @@ const indexHtml = await readFile(join(import.meta.dirname, "..", "public", "inde
 const sessions = new Map<string, { busy: boolean; turns: number; createdAt: number }>();
 const sessionStartsByIp = new Map<string, number[]>();
 
+// Behind a reverse proxy every request comes from the proxy, so the client address is read from a header
+// the proxy sets. It must be one the proxy overwrites on every request (Fly.io: fly-client-ip), otherwise
+// visitors can send their own value and get around the per-IP limit.
+const clientIpHeader = process.env.CLIENT_IP_HEADER?.trim().toLowerCase();
+
 function clientIp(req: IncomingMessage): string {
-  // Behind a reverse proxy every request comes from the proxy, so read the forwarded address instead.
-  // X-Real-IP comes first: Railway's edge overwrites it on every request, so visitors cannot spoof it.
-  if (process.env.TRUST_PROXY === "1") {
-    const realIp = req.headers["x-real-ip"];
-    const real = (Array.isArray(realIp) ? realIp[0] : realIp)?.trim();
-    if (real) return real;
-    const forwarded = req.headers["x-forwarded-for"];
-    const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim();
-    if (first) return first;
+  if (clientIpHeader) {
+    const value = req.headers[clientIpHeader];
+    const ip = (Array.isArray(value) ? value[0] : value)?.trim();
+    if (ip) return ip;
   }
   return req.socket.remoteAddress ?? "unknown";
 }
