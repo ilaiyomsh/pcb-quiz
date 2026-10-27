@@ -20,30 +20,25 @@
 
 **נבדק:** `npm run typecheck` עובר מול `@anthropic-ai/sdk` 1.3.0 (שמות האירועים והשדות נלקחו מה-types של ה-SDK המותקן). השרת עולה (Node 22 מריץ TypeScript ישירות). נבדקו מקרי שגיאה (הודעה ריקה, session לא מוכר, מפתח שגוי) והממשק בדסקטופ ובמובייל עם Playwright.
 
-**לא נבדק:** שיחה אמיתית. בסשן הקודם לא היו מפתח API ו-`ant`. גם ה-YAML של הסוכן לא עבר עדיין ולידציה מול ה-API.
+**נבדק מול ה-API (סשן 2):** `ant apply` יצר את הסוכן והסביבה, ושתי שיחות ניסיון מלאות עברו דרך `/api/chat`:
+
+- משרד רואי חשבון, 25 עובדים: 4 שאלות (כולל הפתיחה), סיכום עם 3 נקודות כאב וכיוון AI לכל אחת, בקשת פרטי קשר, הכלי נקרא פעם אחת וליד נשמר עם כל השדות. עלות: $0.10.
+- עמותה לחלוקת מזון: שאלה על מחיר נענתה בלי מחיר, המבקר סירב להשאיר פרטים, הכלי נקרא עם `consent_to_contact: false` ו-`contact: null`. עלות: $0.09.
+- ההזרמה עובדת: ה-delta הראשון מגיע אחרי 2-3 שניות. בתור שבו הסוכן קורא לכלי יש כ-10-13 שניות בלי טקסט (רק נקודות ההקלדה), כי הסוכן כותב קודם את קלט הכלי.
 
 ## מצב הסביבה
 
-- המשתמש הוסיף `ANTHROPIC_API_KEY` כמשתנה סביבה. המפתח נוצר ב-workspace הקיים של הארגון ב-Console; לא נוצר workspace נפרד לבוט, כי זה לא אפשרי מהטלפון. לארגון יש תקרה חודשית של $500. ייתכן שלמשתמש אין הרשאת Admin בארגון ב-Console.
-- `ant` לא מותקן. המשתמש ביקש להתקין אותו בסשן הזה.
-- `twyst.co.il` היה חסום ברשת (403 מהפרוקסי). המשתמש התבקש להוסיף את `twyst.co.il` ו-`www.twyst.co.il` לרשימת האתרים המותרים. לבדוק אם זה נכנס לתוקף.
-- המידע על Twyst בהנחיות נלקח ממסמכים ב-Google Drive של המשתמש: ייעול תהליכי עבודה בארגונים עם monday.com, אפליקציות ייעודיות, אוטומציות ואינטגרציות ופתרונות AI, ללקוחות עסקיים ולגופים ציבוריים. Tagline: "Systems that drive decisions."
+- המפתח זמין בסביבת הענן בשם `ANTHROPIC_KEY`, לא `ANTHROPIC_API_KEY`. ה-SDK ו-`ant` קוראים רק את `ANTHROPIC_API_KEY`, ולכן מריצים עם `ANTHROPIC_API_KEY="$ANTHROPIC_KEY"` (או שהמשתמש ישנה את שם המשתנה בהגדרות הסביבה). המפתח שייך ל-workspace `wrkspc_01LB7nNcgsEFSh6bqET6wQ2B`, לא ל-default.
+- `ant` 2.4.0 הותקן עם `go install 'github.com/anthropics/anthropic-cli/v2/cmd/ant@v2.4.0'` (`GOTOOLCHAIN=auto`, כי נדרש Go 1.25) ל-`/root/go/bin/ant`. הורדת release מ-GitHub חסומה בפרוקסי. ההתקנה לא שורדת סשן חדש.
+- הסוכן: `agent_01L4JFT2A3fpNPntvhp9Aidk` (גרסה 2). הסביבה: `env_01838MvQK7ragFhnRhjN39o7`. שניהם ב-`claude-lock.json`.
+- `.env` (לא ב-git) כולל את שני המזהים ו-`ANTHROPIC_WORKSPACE=wrkspc_01LB7nNcgsEFSh6bqET6wQ2B`. לא נבדק אם קישורי ה-Console בלוג עובדים עם מזהה ה-workspace.
+- `twyst.co.il` נגיש עכשיו. פסקת "על Twyst" עודכנה מהאתר (גרסה 2 של הסוכן), בלי שמות לקוחות, מספרים או משכי זמן של שירותים.
+- גרסה 2 גם מורה לסוכן לכתוב טקסט פשוט בלי Markdown: בגרסה 1 הסיכום כלל `**הדגשה**`, והממשק מציג טקסט כמו שהוא (`textContent`), כך שהכוכביות היו נראות.
 
 ## הצעדים הבאים
 
-1. `git checkout twyst-discovery-chat`, ולוודא שהמפתח זמין בלי להדפיס אותו: `echo ${ANTHROPIC_API_KEY:+set}`.
-2. להתקין `ant` בגרסה 1.30.0 ומעלה (release ללינוקס מ-`github.com/anthropics/anthropic-cli/releases`), ולהריץ `ant auth status`.
-3. `ant apply --dry-run -v agents/twyst-discovery.md environments/twyst-chat.yaml`, ולהציג למשתמש את התוכנית. רק אחרי שהוא מאשר: `ant apply --yes agents/twyst-discovery.md environments/twyst-chat.yaml`. לא להוסיף `--force` או `--prune`.
-4. לעשות commit ל-`claude-lock.json`, וליצור `.env` (לא נכנס ל-git) עם `TWYST_AGENT_ID` ו-`TWYST_ENVIRONMENT_ID` מתוך ה-lock. אם המפתח לא ב-workspace בשם default, להגדיר גם `ANTHROPIC_WORKSPACE` כדי שקישורי ה-Console בלוג יעבדו.
-5. `npm install && npm start`, ולהריץ שיחת ניסיון מלאה. למשל לקוח מדומה שהוא משרד רואי חשבון עם 25 עובדים, דרך `curl` ל-`/api/chat` או Playwright, עד שהכלי נקרא. לבדוק:
-   - שאלה אחת בכל הודעה, ולא יותר מחמש שאלות.
-   - הסיכום מציג 2-3 נקודות כאב עם כיוון AI לכל אחת.
-   - הבוט מבקש פרטי קשר.
-   - נוצר קובץ ב-`leads/` עם שדות סבירים.
-   - התשובות מגיעות בהזרמה (`delta`) ולא רק בסוף.
-   - העלות של שיחה ב-Console.
-6. אם `twyst.co.il` נגיש: לקרוא את האתר ולעדכן את פסקת "על Twyst" בהנחיות, בלי שמות של לקוחות. אחרי כל שינוי בהנחיות מריצים `ant apply` שוב (גרסה חדשה של אותו סוכן).
-7. לדווח למשתמש מה עבד ומה כדאי לשפר, ולשאול אם לפתוח PR ל-`main`.
+1. לשאול את המשתמש אם לפתוח PR ל-`main`.
+2. שאלות פתוחות (למטה).
 
 ## להיזהר
 
