@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
-import { createChatSession, runTurn, type ChatConfig, type ChatEvent } from "./chat.ts";
+import { createChatSession, runTurn, type ChatConfig, type ChatEvent, type TurnState } from "./chat.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const MAX_MESSAGE_CHARS = 2000;
@@ -17,8 +17,10 @@ if (!agentId || !environmentId) {
   process.exit(1);
 }
 
+const agentVersion = Number(process.env.TWYST_AGENT_VERSION) || undefined;
 const config: ChatConfig = {
   agentId,
+  agentVersion,
   environmentId,
   budgetCents: process.env.SESSION_BUDGET_CENTS ?? "100",
   workspace: process.env.ANTHROPIC_WORKSPACE ?? "default",
@@ -27,7 +29,7 @@ const client = new Anthropic();
 const indexHtml = await readFile(join(import.meta.dirname, "..", "public", "index.html"));
 
 // Sessions this server created. A session ID from the browser is accepted only if it is in here.
-const sessions = new Map<string, { busy: boolean; turns: number; createdAt: number }>();
+const sessions = new Map<string, TurnState & { busy: boolean; turns: number; createdAt: number }>();
 const sessionStartsByIp = new Map<string, number[]>();
 
 // Behind a reverse proxy every request comes from the proxy, so the client address is read from a header
@@ -119,7 +121,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 
   emit({ type: "session", sessionId });
   try {
-    await runTurn(client, sessionId, message, emit);
+    await runTurn(client, sessionId, message, state, emit);
   } catch (err) {
     console.error(`turn failed in ${sessionId}:`, err);
     emit({ type: "error", message: "משהו השתבש אצלנו. אפשר לנסות שוב בעוד רגע." });

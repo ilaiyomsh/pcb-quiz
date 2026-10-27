@@ -19,6 +19,7 @@ export interface DiscoverySummary {
     ai_direction?: string;
   }>;
   tools_in_use?: string[];
+  trigger?: string;
   urgency?: "high" | "medium" | "low" | "unknown";
   team_summary: string;
   consent_to_contact: boolean;

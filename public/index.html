@@ -20,6 +20,7 @@
       --page: #F8FAFC;
     }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     html, body { height: 100%; margin: 0; }
     body {
       font-family: "Noto Sans Hebrew", system-ui, sans-serif;
@@ -81,6 +82,45 @@
     }
     .note { align-self: center; color: var(--gray); font-size: 13px; text-align: center; }
     .note.ok { color: #16A34A; }
+    .card {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+    }
+    .question { margin: 0; padding: 0; border: 0; min-width: 0; }
+    .question legend { padding: 0; margin-bottom: 8px; font-weight: 600; line-height: 1.5; }
+    .hint { color: var(--gray); font-size: 12px; font-weight: 400; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      color: var(--navy);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+    .chip:hover:not(:disabled) { border-color: var(--blue); }
+    .chip[aria-pressed="true"] { color: #fff; background: var(--blue); border-color: var(--blue); }
+    .other-text {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      font: inherit;
+      color: inherit;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    .other-text:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+    .card-submit { align-self: flex-end; padding: 8px 18px; }
+    .card.answered .chip { opacity: .4; }
+    .card.answered .chip[aria-pressed="true"] { opacity: 1; }
+    .card.answered .card-submit { display: none; }
     .typing { display: inline-flex; gap: 4px; padding: 14px; }
     .typing span {
       width: 7px; height: 7px; border-radius: 50%; background: var(--gray);
@@ -117,6 +157,20 @@
       cursor: pointer;
     }
     button:disabled, textarea:disabled { opacity: .5; cursor: default; }
+    .mic {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      padding: 0;
+      color: var(--navy);
+      background: var(--bot-bg);
+    }
+    .mic svg { width: 20px; height: 20px; }
+    .mic.recording { color: #fff; background: var(--magenta); animation: pulse 1.4s infinite; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(217, 70, 239, .45); }
+      50% { box-shadow: 0 0 0 6px rgba(217, 70, 239, 0); }
+    }
     .privacy { margin: 0; padding: 0 16px 12px; color: var(--gray); font-size: 12px; }
   </style>
 </head>
@@ -130,6 +184,9 @@
     <div id="log" aria-live="polite"></div>
     <form id="form">
       <textarea id="input" rows="1" maxlength="2000" placeholder="כתבו כאן..." aria-label="הודעה"></textarea>
+      <button id="mic" class="mic" type="button" hidden aria-pressed="false" aria-label="הקלטה קולית" title="דברו, והטקסט ייכתב בתיבה">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
       <button id="send" type="submit">שליחה</button>
     </form>
     <p class="privacy">הסיכום נשמר כדי שנציג Twyst יוכל לחזור אליכם. אין צורך לשתף מידע רגיש.</p>
@@ -151,9 +208,13 @@
     const form = document.getElementById("form");
     const input = document.getElementById("input");
     const sendButton = document.getElementById("send");
+    const micButton = document.getElementById("mic");
+    const PLACEHOLDER = input.placeholder;
     const bubbles = new Map();
     let sessionId = null;
     let typing = null;
+    // The question card waiting for an answer. The next message, a click or typed text, answers it.
+    let activeCard = null;
 
     function scrollDown() { log.scrollTop = log.scrollHeight; }
 
@@ -178,6 +239,7 @@
     function setBusy(busy) {
       input.disabled = busy;
       sendButton.disabled = busy;
+      micButton.disabled = busy;
       if (busy && !typing) {
         typing = document.createElement("div");
         typing.className = "bubble bot typing";
@@ -187,8 +249,114 @@
       } else if (!busy && typing) {
         typing.remove();
         typing = null;
-        input.focus();
+        // A focused button keeps the phone keyboard closed, so the card stays in view.
+        (activeCard?.querySelector(".chip") ?? input).focus();
       }
+    }
+
+    // A card from the agent's ask_visitor tool: buttons for each question, plus "אחר" with a text field.
+    // One question with a single answer is sent on the first click; otherwise the card's send button sends it.
+    function addQuestionCard(questions) {
+      const card = document.createElement("div");
+      card.className = "card";
+      const instant = questions.length === 1 && !questions[0].multi_select;
+      const submit = document.createElement("button");
+      submit.type = "button";
+      submit.className = "card-submit";
+      submit.textContent = "שליחה";
+
+      const fields = questions.map((q) => {
+        const fieldset = document.createElement("fieldset");
+        fieldset.className = "question";
+        const legend = document.createElement("legend");
+        legend.dir = "auto";
+        legend.textContent = q.question;
+        if (q.multi_select) {
+          const hint = document.createElement("span");
+          hint.className = "hint";
+          hint.textContent = " (אפשר לבחור כמה)";
+          legend.append(hint);
+        }
+        const chips = document.createElement("div");
+        chips.className = "chips";
+        const other = document.createElement("input");
+        other.className = "other-text";
+        other.dir = "auto";
+        other.maxLength = 300;
+        other.placeholder = "כתבו כאן";
+        other.hidden = true;
+        other.setAttribute("aria-label", `${q.question}: תשובה אחרת`);
+        const field = { q, chips: [], other };
+
+        for (const label of [...q.options, "אחר"]) {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip";
+          chip.dir = "auto";
+          chip.textContent = label;
+          chip.setAttribute("aria-pressed", "false");
+          chip.addEventListener("click", () => pick(field, chip));
+          field.chips.push(chip);
+          chips.append(chip);
+        }
+        other.addEventListener("input", updateSubmit);
+        other.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submitCard();
+          }
+        });
+        fieldset.append(legend, chips, other);
+        card.append(fieldset);
+        return field;
+      });
+
+      function pick(field, chip) {
+        const otherChip = field.chips.at(-1);
+        const on = !field.q.multi_select || chip.getAttribute("aria-pressed") !== "true";
+        if (!field.q.multi_select) for (const c of field.chips) c.setAttribute("aria-pressed", "false");
+        chip.setAttribute("aria-pressed", String(on));
+        field.other.hidden = otherChip.getAttribute("aria-pressed") !== "true";
+        if (chip === otherChip && on) field.other.focus();
+        if (instant && chip !== otherChip) return submitCard();
+        updateSubmit();
+      }
+
+      function answerOf(field) {
+        const picked = field.chips.slice(0, -1).filter((c) => c.getAttribute("aria-pressed") === "true").map((c) => c.textContent);
+        const other = field.other.hidden ? "" : field.other.value.trim();
+        return other ? [...picked, other] : picked;
+      }
+
+      function updateSubmit() {
+        submit.disabled = fields.some((f) => answerOf(f).length === 0);
+      }
+
+      function submitCard() {
+        const answers = fields.map(answerOf);
+        if (answers.some((a) => a.length === 0) || input.disabled) return;
+        // The bubble shows the answers; the agent also gets each question, so it knows which answer is which.
+        send(
+          answers.map((a) => a.join(", ")).join("\n"),
+          fields.map((f, i) => `${f.q.question}\n${answers[i].join(", ")}`).join("\n\n"),
+        );
+      }
+
+      submit.addEventListener("click", submitCard);
+      card.append(submit);
+      updateSubmit();
+      log.insertBefore(card, typing);
+      input.placeholder = "או כתבו תשובה משלכם...";
+      scrollDown();
+      return card;
+    }
+
+    function closeActiveCard() {
+      if (!activeCard) return;
+      activeCard.classList.add("answered");
+      for (const el of activeCard.querySelectorAll("button, input")) el.disabled = true;
+      activeCard = null;
+      input.placeholder = PLACEHOLDER;
     }
 
     function handleEvent(event) {
@@ -211,6 +379,9 @@
           scrollDown();
           break;
         }
+        case "question":
+          activeCard = addQuestionCard(event.questions);
+          break;
         case "lead_saved":
           addNote("✓ הסיכום הועבר לצוות Twyst", true);
           break;
@@ -220,14 +391,17 @@
       }
     }
 
-    async function send(text) {
+    // `text` is what the bubble shows, `message` what the agent gets (they differ for a card's answers).
+    async function send(text, message = text) {
+      stopDictation(true);
+      closeActiveCard();
       addBubble("user", text);
       setBusy(true);
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sessionId, message: text }),
+          body: JSON.stringify({ sessionId, message }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -254,6 +428,63 @@
       }
     }
 
+    function resizeInput() {
+      input.style.height = "";
+      input.style.height = `${input.scrollHeight}px`;
+    }
+
+    // Voice input through the browser's own speech recognition (Chrome, Edge, Safari). Where there is none,
+    // as in Firefox, the button stays hidden. The words land in the box, so the visitor checks them before sending.
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    let recognition = null;
+
+    function startDictation() {
+      const before = input.value.trim();
+      recognition = new Recognition();
+      recognition.lang = "he-IL";
+      recognition.interimResults = true;
+      // Chrome on Android repeats earlier words in continuous mode, so there it stops after a pause.
+      recognition.continuous = !/Android/i.test(navigator.userAgent);
+      recognition.onresult = (e) => {
+        let heard = "";
+        for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript;
+        input.value = [before, heard.trim()].filter(Boolean).join(" ");
+        resizeInput();
+      };
+      recognition.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          addNote("אין גישה למיקרופון. אפשר לאשר אותה בהגדרות הדפדפן, או פשוט לכתוב.");
+        } else if (e.error === "network") {
+          addNote("זיהוי הדיבור לא זמין כרגע. אפשר לכתוב.");
+        }
+      };
+      recognition.onend = () => {
+        recognition = null;
+        micButton.classList.remove("recording");
+        micButton.setAttribute("aria-pressed", "false");
+        if (!input.disabled) input.focus();
+      };
+      recognition.start();
+      micButton.classList.add("recording");
+      micButton.setAttribute("aria-pressed", "true");
+    }
+
+    // On send the recording is dropped, so late results do not refill the cleared box.
+    function stopDictation(discard = false) {
+      if (!recognition) return;
+      if (discard) {
+        recognition.onresult = null;
+        recognition.abort();
+      } else {
+        recognition.stop();
+      }
+    }
+
+    if (Recognition) {
+      micButton.hidden = false;
+      micButton.addEventListener("click", () => (recognition ? stopDictation() : startDictation()));
+    }
+
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const text = input.value.trim();
@@ -270,10 +501,7 @@
       }
     });
 
-    input.addEventListener("input", () => {
-      input.style.height = "";
-      input.style.height = `${input.scrollHeight}px`;
-    });
+    input.addEventListener("input", resizeInput);
 
     addBubble("bot", GREETING);
     input.focus();
