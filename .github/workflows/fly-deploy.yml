@@ -1,11 +1,10 @@
-# Deploys the chat to Fly.io on every push to main. Needs a repository secret FLY_API_TOKEN holding a deploy
-# token for the app (Fly dashboard -> twyst-discovery-chat -> Tokens, or `fly tokens create deploy -a twyst-discovery-chat`).
+# Manual deploy to Fly.io (Actions -> Deploy to Fly.io -> Run workflow). Pushes to main are deployed by Fly's own
+# GitHub connection; this is the fallback. Needs a repository secret FLY_API_TOKEN holding a deploy token for the
+# app (Fly dashboard -> twyst-discovery-chat -> Tokens, or `fly tokens create deploy -a twyst-discovery-chat`).
 # Changes to the agent itself still go out with `ant apply`, not with this workflow.
 name: Deploy to Fly.io
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

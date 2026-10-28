@@ -69,7 +69,7 @@ npm run typecheck
 
 ### פריסה אוטומטית
 
-`.github/workflows/fly-deploy.yml` פורס מחדש בכל push ל-`main`, אחרי typecheck. אפשר גם להריץ אותו ידנית מלשונית Actions. צריך פעם אחת:
+האפליקציה ב-Fly מחוברת לריפו דרך הדשבורד של Fly, ונפרסת מחדש בכל push ל-`main`. לגיבוי יש `.github/workflows/fly-deploy.yml`, שמריצים ידנית מלשונית Actions (typecheck ואז deploy). כדי שיעבוד, צריך פעם אחת:
 
 1. ליצור deploy token לאפליקציה: בדשבורד של Fly, באפליקציה `twyst-discovery-chat` ← Tokens, או `fly tokens create deploy -a twyst-discovery-chat`. הטוקן הזה מוגבל לאפליקציה אחת.
 2. ב-GitHub, בריפו: Settings ← Secrets and variables ← Actions ← New repository secret, בשם `FLY_API_TOKEN`.
