@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "origin": {
+    "base_url": "https://api.anthropic.com",
+    "organization_id": "cad6cd61-0e54-48c5-8b28-df29ead9cbf0",
+    "workspace_id": "wrkspc_01LB7nNcgsEFSh6bqET6wQ2B"
+  },
+  "resources": {
+    "./agents/twyst-discovery.md": {
+      "kind": "agent",
+      "id": "agent_01L4JFT2A3fpNPntvhp9Aidk",
+      "version": "3",
+      "hash": "ab4f78f4e9e478a9dc1ef0e4184a814e",
+      "remote_hash": "78adc8079a129e3e62d3f51af7e13924"
+    },
+    "./environments/twyst-chat.yaml": {
+      "kind": "environment",
+      "id": "env_01838MvQK7ragFhnRhjN39o7",
+      "hash": "9ff141ef7d556acb20145efd0fd77193",
+      "remote_hash": "211a79fe28a11304ea40ccfd6c9f3afc"
+    }
+  }
+}
