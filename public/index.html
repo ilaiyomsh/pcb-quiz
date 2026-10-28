@@ -435,36 +435,59 @@
 
     // Voice input through the browser's own speech recognition (Chrome, Edge, Safari). Where there is none,
     // as in Firefox, the button stays hidden. The words land in the box, so the visitor checks them before sending.
-    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    // On iPhone and iPad only Safari may use it: Chrome, Firefox, Edge and in-app browsers have the API but fail
+    // with "service-not-allowed" before asking for permission, so the button is hidden there as well.
+    const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const iOSOtherBrowser = iOS && /CriOS|FxiOS|EdgiOS|OPiOS|GSA\/|FBAN|FBAV|Instagram|LinkedInApp|Line\//.test(navigator.userAgent);
+    const Recognition = iOSOtherBrowser ? null : (window.SpeechRecognition ?? window.webkitSpeechRecognition);
     let recognition = null;
+
+    function resetMic() {
+      recognition = null;
+      micButton.classList.remove("recording");
+      micButton.setAttribute("aria-pressed", "false");
+    }
 
     function startDictation() {
       const before = input.value.trim();
-      recognition = new Recognition();
-      recognition.lang = "he-IL";
-      recognition.interimResults = true;
+      const current = new Recognition();
+      recognition = current;
+      current.lang = "he-IL";
+      current.interimResults = true;
       // Chrome on Android repeats earlier words in continuous mode, so there it stops after a pause.
-      recognition.continuous = !/Android/i.test(navigator.userAgent);
-      recognition.onresult = (e) => {
+      current.continuous = !/Android/i.test(navigator.userAgent);
+      current.onresult = (e) => {
         let heard = "";
         for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript;
         input.value = [before, heard.trim()].filter(Boolean).join(" ");
         resizeInput();
       };
-      recognition.onerror = (e) => {
-        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      // Some browsers skip "end" after an error, so the error resets the button too.
+      current.onerror = (e) => {
+        if (e.error === "service-not-allowed") {
+          // The browser does not allow speech recognition (for one, an in-app browser on iPhone that looks like Safari).
+          micButton.hidden = true;
+          addNote(iOS
+            ? "ההקלטה הקולית לא זמינה כאן. באייפון היא עובדת בספארי, אחרי אישור של מיקרופון וזיהוי דיבור. אפשר גם לכתוב."
+            : "ההקלטה הקולית לא זמינה בדפדפן הזה. אפשר לכתוב.");
+        } else if (e.error === "not-allowed") {
           addNote("אין גישה למיקרופון. אפשר לאשר אותה בהגדרות הדפדפן, או פשוט לכתוב.");
         } else if (e.error === "network") {
           addNote("זיהוי הדיבור לא זמין כרגע. אפשר לכתוב.");
         }
+        if (recognition === current) resetMic();
       };
-      recognition.onend = () => {
-        recognition = null;
-        micButton.classList.remove("recording");
-        micButton.setAttribute("aria-pressed", "false");
+      current.onend = () => {
+        if (recognition !== current) return;
+        resetMic();
         if (!input.disabled) input.focus();
       };
-      recognition.start();
+      try {
+        current.start();
+      } catch {
+        resetMic();
+        return;
+      }
       micButton.classList.add("recording");
       micButton.setAttribute("aria-pressed", "true");
     }
@@ -475,6 +498,7 @@
       if (discard) {
         recognition.onresult = null;
         recognition.abort();
+        resetMic();
       } else {
         recognition.stop();
       }
