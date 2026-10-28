@@ -9,9 +9,9 @@
     "./agents/twyst-discovery.md": {
       "kind": "agent",
       "id": "agent_01L4JFT2A3fpNPntvhp9Aidk",
-      "version": "2",
-      "hash": "01816456c1467832c851fef0b414c8b6",
-      "remote_hash": "549e06653dd7b77829b7332e92705b0c"
+      "version": "3",
+      "hash": "ab4f78f4e9e478a9dc1ef0e4184a814e",
+      "remote_hash": "78adc8079a129e3e62d3f51af7e13924"
     },
     "./environments/twyst-chat.yaml": {
       "kind": "environment",
